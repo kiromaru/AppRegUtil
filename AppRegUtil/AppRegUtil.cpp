@@ -171,6 +171,86 @@ bool ValidateParameters(int argc, char** argv, Commands& command, CString& fileN
     return true;
 }
 
+void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
+{
+    DWORD dwType;
+    LSTATUS status = ::RegQueryValueExW(hKey, pszValueName, nullptr, &dwType, nullptr, nullptr);
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to get type of value: " << pszValueName << L", result: " << status << endl;
+        return;
+    }
+
+    CRegKey key;
+    status = key.Open(hKey, nullptr, KEY_READ);
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to re-open key for Get, result: " << status << endl;
+        return;
+    }
+
+    switch (dwType)
+    {
+        case REG_DWORD:
+        {
+            DWORD dwValue;
+            key.QueryDWORDValue(pszValueName, dwValue);
+
+            wcout << L"Type: REG_DWORD, Value: " << dwValue << endl;
+        }
+        break;
+
+        case REG_SZ:
+        {
+            CString strValue;
+            ULONG chars = 1024;
+            key.QueryStringValue(pszValueName, strValue.GetBuffer(1024), &chars);
+            strValue.ReleaseBuffer();
+
+            wcout << L"Type: REG_SZ, Value: '" << strValue << L"'" << endl;
+        }
+        break;
+
+        case REG_QWORD:
+        {
+            ULONGLONG ullValue;
+            key.QueryQWORDValue(pszValueName, ullValue);
+
+            wcout << L"Type: REQ_QWORD, Value: " << ullValue << endl;
+        }
+        break;
+    }
+}
+
+void ExecuteGet(LPCWSTR pszFileName, LPCWSTR pszKeyPath, LPCWSTR pszValueName)
+{
+    HKEY hAppKey;
+    LSTATUS status = ::RegLoadAppKeyW(pszFileName, &hAppKey, KEY_ALL_ACCESS, 0, 0);
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to RegLoadAppKey: " << pszFileName << L", result: " << status << endl;
+        return;
+    }
+
+    CRegKey key;
+    status = key.Open(hAppKey, pszKeyPath, KEY_READ);
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to open key: " << pszKeyPath << L", result: " << status << endl;
+        return;
+    }
+
+    if (StrCmp(pszValueName, L"*") == 0)
+    {
+        // Enumerate values
+    }
+    else
+    {
+        // Get specific value
+        GetSpecificValue(key.m_hKey, pszValueName);
+    }
+}
+
 void ExecuteCopy(LPCWSTR pszFileName, LPCWSTR pszKeyPath, HKEY keyRoot)
 {
     HKEY hAppKey;
@@ -183,14 +263,22 @@ void ExecuteCopy(LPCWSTR pszFileName, LPCWSTR pszKeyPath, HKEY keyRoot)
     }
 
     CRegKey key;
-    status = key.Open(keyRoot, pszKeyPath, KEY_READ);
+    status = key.Open(keyRoot, pszKeyPath, KEY_ALL_ACCESS);
     if (ERROR_SUCCESS != status)
     {
         wcout << L"Failed to open path: " << pszKeyPath << L", result: " << status << endl;
         return;
     }
 
-    status = RegCopyTreeW(key.m_hKey, nullptr, hAppKey);
+    CRegKey subAppKey;
+    status = subAppKey.Create(hAppKey, pszKeyPath, nullptr, 0, KEY_ALL_ACCESS);
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to create sub key under App registry: " << pszKeyPath << ", result: " << status << endl;
+        return;
+    }
+
+    status = RegCopyTreeW(key.m_hKey, nullptr, subAppKey.m_hKey);
     if (ERROR_SUCCESS != status)
     {
         wcout << L"Failed to copy tree, result: " << status << endl;
@@ -214,6 +302,23 @@ int main(int argc, char** argv)
     {
         Usage(argv[0]);
         return -1;
+    }
+
+    switch (command)
+    {
+    case Commands::Get:
+        ExecuteGet(fileName, keyPath, valueName);
+        break;
+
+    case Commands::Set:
+        break;
+
+    case Commands::Copy:
+        ExecuteCopy(fileName, keyPath, keyRoot);
+        break;
+
+    default:
+        wcout << L"Unknown command: " << command << endl;
     }
 }
 
