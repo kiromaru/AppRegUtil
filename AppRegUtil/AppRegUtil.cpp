@@ -237,18 +237,48 @@ void ExecuteGet(LPCWSTR pszFileName, LPCWSTR pszKeyPath, LPCWSTR pszValueName)
     if (ERROR_SUCCESS != status)
     {
         wcout << L"Failed to open key: " << pszKeyPath << L", result: " << status << endl;
+        ::RegCloseKey(hAppKey);
         return;
     }
 
     if (StrCmp(pszValueName, L"*") == 0)
     {
         // Enumerate values
+        for (int i = 0; ; i++)
+        {
+            CString strKeyName;
+            DWORD dwNameLength = 1024;
+            status = key.EnumKey(i, strKeyName.GetBuffer(dwNameLength), &dwNameLength);
+            strKeyName.ReleaseBuffer();
+            if (ERROR_SUCCESS != status)
+            {
+                break;
+            }
+
+            wcout << L"Key: " << strKeyName.GetBuffer() << endl;
+        }
+
+        for (int i = 0; ; i++)
+        {
+            CString strValueName;
+            DWORD dwNameLength = 1024;
+            status = ::RegEnumValueW(key.m_hKey, i, strValueName.GetBuffer(dwNameLength), &dwNameLength, nullptr, nullptr, nullptr, nullptr);
+            strValueName.ReleaseBuffer();
+            if (ERROR_SUCCESS != status)
+            {
+                break;
+            }
+
+            GetSpecificValue(key.m_hKey, strValueName);
+        }
     }
     else
     {
         // Get specific value
         GetSpecificValue(key.m_hKey, pszValueName);
     }
+
+    ::RegCloseKey(hAppKey);
 }
 
 void ExecuteCopy(LPCWSTR pszFileName, LPCWSTR pszKeyPath, HKEY keyRoot)
@@ -267,6 +297,7 @@ void ExecuteCopy(LPCWSTR pszFileName, LPCWSTR pszKeyPath, HKEY keyRoot)
     if (ERROR_SUCCESS != status)
     {
         wcout << L"Failed to open path: " << pszKeyPath << L", result: " << status << endl;
+        ::RegCloseKey(hAppKey);
         return;
     }
 
@@ -275,6 +306,7 @@ void ExecuteCopy(LPCWSTR pszFileName, LPCWSTR pszKeyPath, HKEY keyRoot)
     if (ERROR_SUCCESS != status)
     {
         wcout << L"Failed to create sub key under App registry: " << pszKeyPath << ", result: " << status << endl;
+        ::RegCloseKey(hAppKey);
         return;
     }
 
@@ -282,10 +314,13 @@ void ExecuteCopy(LPCWSTR pszFileName, LPCWSTR pszKeyPath, HKEY keyRoot)
     if (ERROR_SUCCESS != status)
     {
         wcout << L"Failed to copy tree, result: " << status << endl;
+        ::RegCloseKey(hAppKey);
         return;
     }
 
     wcout << L"Tree copied successfully." << endl;
+
+    ::RegCloseKey(hAppKey);
 }
 
 int main(int argc, char** argv)
