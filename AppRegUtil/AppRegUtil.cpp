@@ -189,6 +189,15 @@ void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
         return;
     }
 
+    if (StrCmp(pszValueName, L"") == 0)
+    {
+        wcout << L"(default), ";
+    }
+    else
+    {
+        wcout << pszValueName << L", ";
+    }
+
     switch (dwType)
     {
         case REG_DWORD:
@@ -196,7 +205,7 @@ void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
             DWORD dwValue;
             key.QueryDWORDValue(pszValueName, dwValue);
 
-            wcout << L"Type: REG_DWORD, Value: " << dwValue << endl;
+            wcout << L"REG_DWORD: " << dwValue << endl;
         }
         break;
 
@@ -207,7 +216,7 @@ void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
             key.QueryStringValue(pszValueName, strValue.GetBuffer(1024), &chars);
             strValue.ReleaseBuffer();
 
-            wcout << L"Type: REG_SZ, Value: '" << strValue << L"'" << endl;
+            wcout << L"REG_SZ: '" << strValue.GetBuffer() << L"'" << endl;
         }
         break;
 
@@ -216,9 +225,29 @@ void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
             ULONGLONG ullValue;
             key.QueryQWORDValue(pszValueName, ullValue);
 
-            wcout << L"Type: REQ_QWORD, Value: " << ullValue << endl;
+            wcout << L"REG_QWORD: " << ullValue << endl;
         }
         break;
+
+        case REG_BINARY:
+        {
+            ULONG ulCount = 1024;
+            BYTE byBuffer[1024];
+            key.QueryBinaryValue(pszValueName, byBuffer, &ulCount);
+
+            wcout << L"REG_BINARY, Byte count: " << ulCount << L", Value: ";
+
+            for (ULONG i = 0; i < ulCount; i++)
+            {
+                wcout << std::hex << byBuffer[i];
+            }
+
+            wcout << endl;
+        }
+        break;
+
+        default:
+            wcout << L"Unrecognized value type: " << dwType << endl;
     }
 }
 
@@ -243,7 +272,7 @@ void ExecuteGet(LPCWSTR pszFileName, LPCWSTR pszKeyPath, LPCWSTR pszValueName)
 
     if (StrCmp(pszValueName, L"*") == 0)
     {
-        // Enumerate values
+        // Enumerate keys
         for (int i = 0; ; i++)
         {
             CString strKeyName;
@@ -258,6 +287,7 @@ void ExecuteGet(LPCWSTR pszFileName, LPCWSTR pszKeyPath, LPCWSTR pszValueName)
             wcout << L"Key: " << strKeyName.GetBuffer() << endl;
         }
 
+        // Enumerate values
         for (int i = 0; ; i++)
         {
             CString strValueName;
@@ -279,6 +309,100 @@ void ExecuteGet(LPCWSTR pszFileName, LPCWSTR pszKeyPath, LPCWSTR pszValueName)
     }
 
     ::RegCloseKey(hAppKey);
+}
+
+bool CopyKey(HKEY hKeySrc, HKEY hKeyDest)
+{
+    bool hadErrors = false;
+
+    CRegKey srcKey(hKeySrc);
+    CRegKey destKey(hKeyDest);
+
+    for (int i = 0; ; i++)
+    {
+        CString strKeyName;
+        DWORD dwKeyNameLength = 256;
+
+        LSTATUS status = srcKey.EnumKey(i, strKeyName.GetBuffer(dwKeyNameLength), &dwKeyNameLength);
+        strKeyName.ReleaseBuffer();
+
+        if (ERROR_SUCCESS == status)
+        {
+            CRegKey subKey;
+            status = subKey.Open(srcKey.m_hKey, strKeyName, KEY_READ);
+
+            if (ERROR_SUCCESS == status)
+            {
+                CRegKey newSubKey;
+                status = newSubKey.Create(destKey.m_hKey, strKeyName, nullptr, 0, KEY_ALL_ACCESS);
+
+                if (ERROR_SUCCESS == status)
+                {
+                    hadErrors |= !CopyKey(subKey.m_hKey, newSubKey.m_hKey);
+                }
+                else
+                {
+                    wcout << L"Failed to create new subkey: " << strKeyName.GetBuffer() << endl;
+                    hadErrors = true;
+                }
+            }
+            else
+            {
+                wcout << L"Failed to open subkeyL " << strKeyName.GetBuffer() << endl;
+                hadErrors = true;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    // Once we have enumerated all keys, copy the values
+    // Enumerate values
+    for (int i = 0; ; i++)
+    {
+        CString strValueName;
+        DWORD dwNameLength = 1024;
+        LSTATUS status = ::RegEnumValueW(hKeySrc, i, strValueName.GetBuffer(dwNameLength), &dwNameLength, nullptr, nullptr, nullptr, nullptr);
+        strValueName.ReleaseBuffer();
+        if (ERROR_SUCCESS != status)
+        {
+            break;
+        }
+
+        DWORD dwType;
+        ULONG ulCount;
+        BYTE* pData;
+        if (ERROR_SUCCESS != ::RegQueryValueExW(srcKey.m_hKey, strValueName, nullptr, nullptr, nullptr, &ulCount))
+        {
+            wcout << "Failed to get size of value: " << strValueName.GetBuffer() << endl;
+            hadErrors = true;
+            continue;
+        }
+
+        pData = new BYTE[ulCount];
+        status = srcKey.QueryValue(strValueName, &dwType, pData, &ulCount);
+
+        if (ERROR_SUCCESS != status)
+        {
+            wcout << L"Failed to get value: " << strValueName.GetBuffer() << endl;
+            hadErrors = true;
+            delete[] pData;
+            continue;
+        }
+
+        status = destKey.SetValue(strValueName, dwType, pData, ulCount);
+        delete[] pData;
+
+        if (ERROR_SUCCESS != status)
+        {
+            wcout << L"Failed to set value: " << strValueName.GetBuffer() << endl;
+            hadErrors = true;
+        }
+    }
+
+    return !hadErrors;
 }
 
 void ExecuteCopy(LPCWSTR pszFileName, LPCWSTR pszKeyPath, HKEY keyRoot)
@@ -310,15 +434,14 @@ void ExecuteCopy(LPCWSTR pszFileName, LPCWSTR pszKeyPath, HKEY keyRoot)
         return;
     }
 
-    status = RegCopyTreeW(key.m_hKey, nullptr, subAppKey.m_hKey);
-    if (ERROR_SUCCESS != status)
+    if (CopyKey(key.m_hKey, subAppKey.m_hKey))
     {
-        wcout << L"Failed to copy tree, result: " << status << endl;
-        ::RegCloseKey(hAppKey);
-        return;
+        wcout << L"Tree copied successfully." << endl;
     }
-
-    wcout << L"Tree copied successfully." << endl;
+    else
+    {
+        wcout << L"Errors found copying tree." << endl;
+    }
 
     ::RegCloseKey(hAppKey);
 }
