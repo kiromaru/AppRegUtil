@@ -171,6 +171,41 @@ bool ValidateParameters(int argc, char** argv, Commands& command, CString& fileN
     return true;
 }
 
+void GetSpecificBinaryValue(HKEY hKey, LPCWSTR pszValueName)
+{
+	CRegKey key;
+	LSTATUS status = key.Open(hKey, nullptr, KEY_READ);
+	if (ERROR_SUCCESS != status)
+	{
+		wcout << L"Failed to re-open key for Get, result: " << status << endl;
+		return;
+	}
+
+	DWORD dwDataSize = 0;
+	status = ::RegGetValueW(hKey, L"", pszValueName, RRF_RT_REG_BINARY, nullptr, nullptr, &dwDataSize);
+
+	if (ERROR_SUCCESS != status)
+	{
+		wcout << L"Failed to get size of binary data, result: " << status << endl;
+		return;
+	}
+
+	ULONG ulCount = dwDataSize;
+	BYTE* pBuffer = new BYTE[dwDataSize];
+	key.QueryBinaryValue(pszValueName, pBuffer, &ulCount);
+
+	wcout << L"REG_BINARY, Byte count: " << ulCount << L", Value: ";
+
+	for (ULONG i = 0; i < ulCount; i++)
+	{
+		wcout << std::hex << pBuffer[i];
+	}
+
+	wcout << endl;
+
+	delete[] pBuffer;
+}
+
 void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
 {
     DWORD dwType;
@@ -231,18 +266,7 @@ void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
 
         case REG_BINARY:
         {
-            ULONG ulCount = 1024;
-            BYTE byBuffer[1024];
-            key.QueryBinaryValue(pszValueName, byBuffer, &ulCount);
-
-            wcout << L"REG_BINARY, Byte count: " << ulCount << L", Value: ";
-
-            for (ULONG i = 0; i < ulCount; i++)
-            {
-                wcout << std::hex << byBuffer[i];
-            }
-
-            wcout << endl;
+			GetSpecificBinaryValue(hKey, pszValueName);
         }
         break;
 
