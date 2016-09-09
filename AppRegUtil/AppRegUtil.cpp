@@ -173,37 +173,37 @@ bool ValidateParameters(int argc, char** argv, Commands& command, CString& fileN
 
 void GetSpecificBinaryValue(HKEY hKey, LPCWSTR pszValueName)
 {
-	CRegKey key;
-	LSTATUS status = key.Open(hKey, nullptr, KEY_READ);
-	if (ERROR_SUCCESS != status)
-	{
-		wcout << L"Failed to re-open key for Get, result: " << status << endl;
-		return;
-	}
+    CRegKey key;
+    LSTATUS status = key.Open(hKey, nullptr, KEY_READ);
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to re-open key for Get, result: " << status << endl;
+        return;
+    }
 
-	DWORD dwDataSize = 0;
-	status = ::RegGetValueW(hKey, L"", pszValueName, RRF_RT_REG_BINARY, nullptr, nullptr, &dwDataSize);
+    DWORD dwDataSize = 0;
+    status = ::RegGetValueW(hKey, L"", pszValueName, RRF_RT_REG_BINARY, nullptr, nullptr, &dwDataSize);
 
-	if (ERROR_SUCCESS != status)
-	{
-		wcout << L"Failed to get size of binary data, result: " << status << endl;
-		return;
-	}
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to get size of binary data, result: " << status << endl;
+        return;
+    }
 
-	ULONG ulCount = dwDataSize;
-	BYTE* pBuffer = new BYTE[dwDataSize];
-	key.QueryBinaryValue(pszValueName, pBuffer, &ulCount);
+    ULONG ulCount = dwDataSize;
+    BYTE* pBuffer = new BYTE[dwDataSize];
+    key.QueryBinaryValue(pszValueName, pBuffer, &ulCount);
 
-	wcout << L"REG_BINARY, Byte count: " << ulCount << L", Value: ";
+    wcout << L"REG_BINARY, Byte count: " << ulCount << L", Value: ";
 
-	for (ULONG i = 0; i < ulCount; i++)
-	{
-		wcout << std::hex << pBuffer[i];
-	}
+    for (ULONG i = 0; i < ulCount; i++)
+    {
+        wcout << std::hex << pBuffer[i];
+    }
 
-	wcout << endl;
+    wcout << endl;
 
-	delete[] pBuffer;
+    delete[] pBuffer;
 }
 
 void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
@@ -266,7 +266,7 @@ void GetSpecificValue(HKEY hKey, LPCWSTR pszValueName)
 
         case REG_BINARY:
         {
-			GetSpecificBinaryValue(hKey, pszValueName);
+            GetSpecificBinaryValue(hKey, pszValueName);
         }
         break;
 
@@ -337,58 +337,58 @@ void ExecuteGet(LPCWSTR pszFileName, LPCWSTR pszKeyPath, LPCWSTR pszValueName)
 
 void ExecuteSet(LPCWSTR pszFileName, LPCWSTR pszKeyPath, LPCWSTR pszValueName, LPCWSTR pszValue, DWORD dwValueType)
 {
-	HKEY hAppKey;
-	LSTATUS status = ::RegLoadAppKeyW(pszFileName, &hAppKey, KEY_ALL_ACCESS, 0, 0);
-	if (ERROR_SUCCESS != status)
-	{
-		wcout << L"Failed to RegLoadAppKey: " << pszFileName << L", result: " << status << endl;
-		return;
-	}
+    HKEY hAppKey;
+    LSTATUS status = ::RegLoadAppKeyW(pszFileName, &hAppKey, KEY_ALL_ACCESS, 0, 0);
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to RegLoadAppKey: " << pszFileName << L", result: " << status << endl;
+        return;
+    }
 
-	CRegKey key;
-	status = key.Open(hAppKey, pszKeyPath, KEY_READ | KEY_WRITE);
-	if (ERROR_SUCCESS != status)
-	{
-		wcout << L"Failed to open key: " << pszKeyPath << L", result: " << status << endl;
-		::RegCloseKey(hAppKey);
-		return;
-	}
+    CRegKey key;
+    status = key.Open(hAppKey, pszKeyPath, KEY_READ | KEY_WRITE);
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to open key: " << pszKeyPath << L", result: " << status << endl;
+        ::RegCloseKey(hAppKey);
+        return;
+    }
 
-	int iValue;
-	ULONGLONG ullValue;
+    int iValue;
+    ULONGLONG ullValue;
 
-	switch (dwValueType)
-	{
-	case REG_DWORD:
-		iValue = _wtoi(pszValue);
-		status = key.SetDWORDValue(pszValueName, iValue);
-		break;
+    switch (dwValueType)
+    {
+    case REG_DWORD:
+        iValue = _wtoi(pszValue);
+        status = key.SetDWORDValue(pszValueName, iValue);
+        break;
 
-	case REG_QWORD:
-		ullValue = _wtoi64(pszValue);
-		status = key.SetQWORDValue(pszValueName, ullValue);
-		break;
+    case REG_QWORD:
+        ullValue = _wtoi64(pszValue);
+        status = key.SetQWORDValue(pszValueName, ullValue);
+        break;
 
-	case REG_BINARY:
-		wcout << L"Do not support setting binary for the moment." << endl;
-		status = ERROR_ACCESS_DENIED;
-		break;
+    case REG_BINARY:
+        wcout << L"Do not support setting binary for the moment." << endl;
+        status = ERROR_ACCESS_DENIED;
+        break;
 
-	case REG_SZ:
-		status = key.SetStringValue(pszValueName, pszValue, dwValueType);
-		break;
+    case REG_SZ:
+        status = key.SetStringValue(pszValueName, pszValue, dwValueType);
+        break;
 
-	default:
-		wcout << L"Unrecognized value type: " << dwValueType << "." << endl;
-		return;
-	}
+    default:
+        wcout << L"Unrecognized value type: " << dwValueType << "." << endl;
+        return;
+    }
 
-	if (ERROR_SUCCESS != status)
-	{
-		wcout << L"Failed to set value. Key: " << pszKeyPath << L", Value name: " << pszValueName << L", result: " << status << endl;
-	}
+    if (ERROR_SUCCESS != status)
+    {
+        wcout << L"Failed to set value. Key: " << pszKeyPath << L", Value name: " << pszValueName << L", result: " << status << endl;
+    }
 
-	::RegCloseKey(hAppKey);
+    ::RegCloseKey(hAppKey);
 }
 
 bool CopyKey(HKEY hKeySrc, HKEY hKeyDest)
@@ -549,7 +549,7 @@ int main(int argc, char** argv)
         break;
 
     case Commands::Set:
-		ExecuteSet(fileName, keyPath, valueName, value, dwValueType);
+        ExecuteSet(fileName, keyPath, valueName, value, dwValueType);
         break;
 
     case Commands::Copy:
